@@ -32,6 +32,7 @@ Options:
 --vpc-cidr                The IPv4 CIDR block of the VPC to which the NIC belongs
 --vpc-id                  The ID of the VPC to which the security group of the NIC belongs
 -u/--public-keys          Public keys. Only available if supplied at instance launch time
+--dns                     The Domain Name System (DNS) configurations of the instance
 -d/--user-data            User-supplied data.Only available if supplied at instance launch time."
 }
 
@@ -125,8 +126,8 @@ function print_all() {
 	print_normal_metric vpc-cidr-block meta-data/network/interfaces/macs/${MAC}/vpc-cidr-block
 	print_normal_metric vpc-id meta-data/network/interfaces/macs/${MAC}/vpc-id
 	print_public_keys
-	print_normal_metric user-data user-data
 	print_dns
+	print_normal_metric user-data user-data
 }
 
 #check if run inside an ecs instance
