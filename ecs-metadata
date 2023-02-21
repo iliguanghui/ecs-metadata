@@ -1,0 +1,230 @@
+#!/bin/bash
+
+function print_help() {
+	echo "ecs-metadata
+Use to retrieve ECS instance metadata from within a running ECS instance. 
+e.g. to retrieve instance id: ecs-metadata -i
+		 to retrieve ami id: ecs-metadata -a
+		 to get help: ecs-metadata --help
+
+Usage: ecs-metadata <option>
+Options:
+--all                     Show all metadata information for this host (also default).
+-a/--image-id             The image id used to launch this instance
+--mac                     The media access control (MAC) address of the instance. If the instance has multiple network interface controllers (NICs), only the MAC address of eth0 is displayed.
+--net                     The network type of the instance
+--nic                     The identifier of the NIC
+-i/--instance-id          The ID of this instance
+-t/--instance-type        The type of instance to launch. For more information, see Instance Types.
+--instance-name           The name of the instance
+--max-netbw-ingress       The maximum inbound internal bandwidth of the instance. Unit: Kbit/s.
+--max-netbw-egress        The maximum outbound internal bandwidth of the instance. Unit: Kbit/s.
+--gateway                 The IPv4 gateway address of the VPC
+-h/--hostname             The local hostname of the instance.
+--private-ipv4            The private IPv4 address of the primary NIC
+--eipv4                   The public IPv4 address of the instance
+--owner-account-id        The ID of the Alibaba Cloud account to which the instance belongs
+--region-id               The region ID of the instance
+--zone-id                 The zone ID of the instance.
+--serial-number           The serial number of the instance
+--vswitch-cidr            The IPv4 CIDR block of the vSwitch to which the NIC is connected
+--vswitch-id              The ID of the vSwitch that resides within the same VPC as the security group of the NIC
+--vpc-cidr                The IPv4 CIDR block of the VPC to which the NIC belongs
+--vpc-id                  The ID of the VPC to which the security group of the NIC belongs
+-u/--public-keys          Public keys. Only available if supplied at instance launch time
+-d/--user-data            User-supplied data.Only available if supplied at instance launch time."
+}
+
+METADATA_BASEURL="http://100.100.100.200"
+METADATA_TOKEN_PATH="latest/api/token"
+
+function set_imds_token() {
+	if [ -z "${IMDS_TOKEN}" ]; then
+		IMDS_TOKEN=$(curl -s -f --max-time 3 -X PUT -H "X-aliyun-ecs-metadata-token-ttl-seconds: 900" ${METADATA_BASEURL}/${METADATA_TOKEN_PATH})
+		if [ "${?}" -gt 0 ] || [ -z "${IMDS_TOKEN}" ]; then
+			echo '[ERROR] Could not get IMDS token. Instance Metadata might have been disabled or this is not an ecs instance.'
+			exit 1
+		fi
+	fi
+}
+
+# param1 = query
+function get_meta() {
+	local imds_out=$(curl -s -q -H "X-aliyun-ecs-metadata-token: ${IMDS_TOKEN}" -f ${METADATA_BASEURL}/latest/${1})
+	echo -n "${imds_out}"
+}
+
+function set_mac() {
+	if [ -z "${MAC}" ]; then
+		MAC=$(get_meta meta-data/mac)
+	fi
+}
+
+#print standard metric
+function print_normal_metric() {
+	metric_path=$2
+	echo -n $1": "
+	RESPONSE=$(get_meta ${metric_path})
+	if [ -n "${RESPONSE}" ]; then
+		echo "$RESPONSE"
+	else
+		echo not available
+	fi
+}
+
+function print_dns() {
+	echo "dns: "
+	x=$(get_meta meta-data/dns-conf/nameservers)
+	if [ -n "$x" ]; then
+		for i in $x; do
+			echo -e "\t" $i
+		done
+	else
+		echo "not available"
+	fi
+}
+
+#print public-keys
+function print_public_keys() {
+	echo 'public-keys: '
+	x=$(get_meta meta-data/public-keys/)
+	if [ -n "${x}" ]; then
+		for i in $x; do
+			index=$(echo $i | cut -d / -f 1)
+			echo index:$index
+			format=$(get_meta meta-data/public-keys/$index/)
+			echo format:$format
+			echo 'key:(begins from next line)'
+			echo $(get_meta meta-data/public-keys/$index/$format)
+		done
+	else
+		echo not available
+	fi
+}
+
+function print_all() {
+	print_normal_metric image-id meta-data/image-id
+	print_normal_metric mac meta-data/mac
+	print_normal_metric network-type meta-data/network-type
+	print_normal_metric nic-id meta-data/network/interfaces/macs/${MAC}/network-interface-id
+	print_normal_metric instance-id meta-data/instance-id
+	print_normal_metric instance-type meta-data/instance/instance-type
+	print_normal_metric instance-name meta-data/instance/instance-name
+	print_normal_metric max-netbw-ingress meta-data/instance/max-netbw-ingress
+	print_normal_metric max-netbw-egress meta-data/instance/max-netbw-egress
+	print_normal_metric gateway meta-data/network/interfaces/macs/${MAC}/gateway
+	print_normal_metric hostname meta-data/hostname
+	print_normal_metric private-ipv4 meta-data/private-ipv4
+	print_normal_metric eipv4 meta-data/eipv4
+	print_normal_metric owner-account-id meta-data/owner-account-id
+	print_normal_metric region-id meta-data/region-id
+	print_normal_metric zone-id meta-data/zone-id
+	print_normal_metric serial-number meta-data/serial-number
+	print_normal_metric vswitch-cidr-block meta-data/network/interfaces/macs/${MAC}/vswitch-cidr-block
+	print_normal_metric vswitch-id meta-data/network/interfaces/macs/${MAC}/vswitch-id
+	print_normal_metric vpc-cidr-block meta-data/network/interfaces/macs/${MAC}/vpc-cidr-block
+	print_normal_metric vpc-id meta-data/network/interfaces/macs/${MAC}/vpc-id
+	print_public_keys
+	print_normal_metric user-data user-data
+	print_dns
+}
+
+#check if run inside an ecs instance
+set_imds_token
+set_mac
+
+#command called in default mode
+if [ "$#" -eq 0 ]; then
+	print_all
+fi
+
+#start processing command line arguments
+while [ "$1" != "" ]; do
+	case $1 in
+	-a | --image-id)
+		print_normal_metric image-id meta-data/image-id
+		;;
+	--mac)
+		print_normal_metric mac meta-data/mac
+		;;
+	--net)
+		print_normal_metric network-type meta-data/network-type
+		;;
+	--nic)
+		print_normal_metric nic-id meta-data/network/interfaces/macs/${MAC}/network-interface-id
+		;;
+	-i | --instance-id)
+		print_normal_metric instance-id meta-data/instance-id
+		;;
+	-t | --instance-type)
+		print_normal_metric instance-type meta-data/instance/instance-type
+		;;
+	--instance-name)
+		print_normal_metric instance-name meta-data/instance/instance-name
+		;;
+	--max-netbw-ingress)
+		print_normal_metric max-netbw-ingress meta-data/instance/max-netbw-ingress
+		;;
+	--max-netbw-egress)
+		print_normal_metric max-netbw-egress meta-data/instance/max-netbw-egress
+		;;
+	--gateway)
+		print_normal_metric gateway meta-data/network/interfaces/macs/${MAC}/gateway
+		;;
+	-h | --hostname)
+		print_normal_metric hostname meta-data/hostname
+		;;
+	--private-ipv4)
+		print_normal_metric private-ipv4 meta-data/private-ipv4
+		;;
+	--eipv4)
+		print_normal_metric eipv4 meta-data/eipv4
+		;;
+	--owner-account-id)
+		print_normal_metric owner-account-id meta-data/owner-account-id
+		;;
+	--region-id)
+		print_normal_metric region-id meta-data/region-id
+		;;
+	--zone-id)
+		print_normal_metric zone-id meta-data/zone-id
+		;;
+	--serial-number)
+		print_normal_metric serial-number meta-data/serial-number
+		;;
+	--vswitch-cidr)
+		print_normal_metric vswitch-cidr-block meta-data/network/interfaces/macs/${MAC}/vswitch-cidr-block
+		;;
+	--vswitch-id)
+		print_normal_metric vswitch-id meta-data/network/interfaces/macs/${MAC}/vswitch-id
+		;;
+	--vpc-cidr)
+		print_normal_metric vpc-cidr-block meta-data/network/interfaces/macs/${MAC}/vpc-cidr-block
+		;;
+	--vpc-id)
+		print_normal_metric vpc-id meta-data/network/interfaces/macs/${MAC}/vpc-id
+		;;
+	-u | --public-keys)
+		print_public_keys
+		;;
+	--dns)
+		print_dns
+		;;
+	-d | --user-data)
+		print_normal_metric user-data user-data
+		;;
+	--help)
+		print_help
+		exit
+		;;
+	--all)
+		print_all
+		exit
+		;;
+	*)
+		print_help
+		exit 1
+		;;
+	esac
+	shift
+done
