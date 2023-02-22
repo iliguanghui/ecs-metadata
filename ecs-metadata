@@ -111,8 +111,8 @@ function print_all() {
 	print_normal_metric instance-id meta-data/instance-id
 	print_normal_metric instance-type meta-data/instance/instance-type
 	print_normal_metric instance-name meta-data/instance/instance-name
-	print_normal_metric max-netbw-ingress meta-data/instance/max-netbw-ingress
-	print_normal_metric max-netbw-egress meta-data/instance/max-netbw-egress
+	print_normal_metric "max-netbw-ingress(unit: kbps)" meta-data/instance/max-netbw-ingress
+	print_normal_metric "max-netbw-egress(unit: kbps)" meta-data/instance/max-netbw-egress
 	print_normal_metric gateway meta-data/network/interfaces/macs/${MAC}/gateway
 	print_normal_metric hostname meta-data/hostname
 	print_normal_metric private-ipv4 meta-data/private-ipv4
@@ -164,10 +164,10 @@ while [ "$1" != "" ]; do
 		print_normal_metric instance-name meta-data/instance/instance-name
 		;;
 	--max-netbw-ingress)
-		print_normal_metric max-netbw-ingress meta-data/instance/max-netbw-ingress
+		print_normal_metric "max-netbw-ingress(unit: kbps)" meta-data/instance/max-netbw-ingress
 		;;
 	--max-netbw-egress)
-		print_normal_metric max-netbw-egress meta-data/instance/max-netbw-egress
+		print_normal_metric "max-netbw-egress(unit: kbps)" meta-data/instance/max-netbw-egress
 		;;
 	--gateway)
 		print_normal_metric gateway meta-data/network/interfaces/macs/${MAC}/gateway
